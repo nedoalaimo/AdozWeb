@@ -70,7 +70,10 @@
         "Repubblica Tunisina": "NO",
         "Uganda": "NO",
         "Repubblica dell'Uganda": "NO",
-        "Romania": "NO"
+        "Romania": "NO",
+        "Repubblica di Croazia": "NO",
+        "Burkina Faso": "NO",
+        "Burundi": "NO"
     },
     "highlights": {
         "Albania": [
@@ -110,6 +113,24 @@
                 "end": 579,
                 "color": "red",
                 "text": "coniuge del genitore biologico del minore"
+            }
+        ],
+        "Burkina Faso": [
+            {
+                "section": "REQUISITI DELLE COPPIE ADOTTANTI",
+                "start": 153,
+                "end": 185,
+                "color": "red",
+                "text": "coppie sposate da almeno 5 anni,"
+            }
+        ],
+        "Burundi": [
+            {
+                "section": "REQUISITI DELLE COPPIE ADOTTANTI",
+                "start": 185,
+                "end": 217,
+                "color": "red",
+                "text": "coppie sposate da almeno 5 anni"
             }
         ]
     }

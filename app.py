@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from pathlib import Path
 import json
 import os
+import re
 
 app = Flask(__name__)
 
@@ -193,6 +194,89 @@ def save_notes():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/search_content', methods=['GET'])
+def search_content():
+    try:
+        query = request.args.get('query', '').strip()
+        if not query:
+            return jsonify({'states': [], 'content': {}})
+
+        # Escape special regex characters but keep spaces
+        escaped_query = ''.join('\\' + c if c in '.^$*+?{}[]\\|()' else c for c in query)
+        # Convert spaces to match any whitespace
+        search_pattern = '\\s+'.join(escaped_query.split())
+        
+        matching_states = []
+        state_contents = {}
+
+        for file_path in STATI_DIR.glob("*.txt"):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Use regex to find the exact sequence of words
+                    if re.search(search_pattern, content, re.IGNORECASE):
+                        state_name = file_path.stem
+                        matching_states.append(state_name)
+                        state_contents[state_name] = content
+
+            except Exception as e:
+                print(f"Error reading file {file_path}: {str(e)}")
+
+        matching_states.sort()
+        return jsonify({
+            'states': matching_states,
+            'content': state_contents
+        })
+
+    except Exception as e:
+        print('Error in search_content:', str(e))
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/search_state_content/<state>')
+def search_state_content(state):
+    query = request.args.get('query', '').lower()
+    if not query:
+        return jsonify({'error': 'No query provided'}), 400
+
+    try:
+        file_path = STATI_DIR / f"{state}.txt"
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Split content into sections
+        sections = {
+            'REQUISITI DELLE COPPIE ADOTTANTI': '',
+            'REQUISITI DEI MINORI ADOTTANDI': '',
+            'PASSAGGI DELLA PROCEDURA': '',
+            'POST ADOZIONE': '',
+            'NOTE': ''
+        }
+        
+        current_section = None
+        current_content = []
+        
+        for line in content.split('\n'):
+            if line.strip() in sections:
+                if current_section:
+                    sections[current_section] = '\n'.join(current_content)
+                current_section = line.strip()
+                current_content = []
+            elif current_section:
+                current_content.append(line)
+        
+        if current_section:
+            sections[current_section] = '\n'.join(current_content)
+
+        # Search in each section
+        matches = {}
+        for section, text in sections.items():
+            if text and query.lower() in text.lower():
+                matches[section] = text
+
+        return jsonify({'matches': matches})
+    except FileNotFoundError:
+        return jsonify({'error': 'State not found'}), 404
 
 if __name__ == '__main__':
     # Use environment variables for configuration

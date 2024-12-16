@@ -13,9 +13,41 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
 });
 
+let contentSearchTimeout = null;
+let lastContentSearch = '';
+let currentSearchQuery = '';
+let searchResults = {};
+
 function setupEventListeners() {
-    // Search box
+    // Search box for state names
     document.getElementById('searchBox').addEventListener('input', filterStates);
+
+    // Content search box
+    const contentSearchBox = document.getElementById('contentSearchBox');
+    contentSearchBox.addEventListener('input', (e) => {
+        const query = e.target.value.trim();
+        
+        // Don't search if query is too short or same as last search
+        if (query === lastContentSearch) return;
+        lastContentSearch = query;
+
+        // Clear previous timeout
+        if (contentSearchTimeout) {
+            clearTimeout(contentSearchTimeout);
+        }
+
+        // Set new timeout to avoid too many requests
+        contentSearchTimeout = setTimeout(() => {
+            searchStateContent(query);
+        }, 300);
+    });
+
+    // Clear content search button
+    document.getElementById('clearContentSearch').addEventListener('click', () => {
+        document.getElementById('contentSearchBox').value = '';
+        lastContentSearch = '';
+        loadStates(); // Reset to show all states
+    });
 
     // Highlight buttons
     document.querySelectorAll('.highlight-btn').forEach(btn => {
@@ -64,9 +96,11 @@ function filterStates() {
     });
 }
 
-async function loadState(state) {
+async function loadState(state, fromSearch = false) {
     try {
         currentState = state;
+        document.getElementById('stateHeader').textContent = state;
+        
         const response = await fetch(`/api/state/${state}`);
         const data = await response.json();
         
@@ -75,19 +109,27 @@ async function loadState(state) {
             return;
         }
         
+        // First, parse and display content normally
         parseAndDisplayContent(data.content);
         
+        // Then, if there's a search query active, highlight the terms
+        const searchBox = document.getElementById('contentSearchBox');
+        const searchQuery = searchBox.value.trim();
+        if (searchQuery) {
+            highlightSearchTerms(searchQuery);
+        }
+
         // Load and apply highlights
         const markingsResponse = await fetch('/api/markings');
         const markingsData = await markingsResponse.json();
         
-        if (state in markingsData.highlights) {
+        if (markingsData.highlights && markingsData.highlights[state]) {
             markingsData.highlights[state].forEach(highlight => {
                 applyStoredHighlight(highlight);
             });
         }
 
-        // Update badges after loading state
+        // Update badges
         updateBadges(state);
     } catch (error) {
         console.error('Error loading state:', error);
@@ -145,6 +187,29 @@ function parseAndDisplayContent(content) {
         document.querySelector(`#${sections[currentSection]} .content-section`).innerHTML = 
             `<div class="content-text">${sectionContent}</div>`;
     }
+}
+
+function highlightSearchTerms(query) {
+    if (!query) return;
+
+    // Get all content sections
+    Object.values(sections).forEach(sectionId => {
+        const contentDiv = document.querySelector(`#${sectionId} .content-section`);
+        if (contentDiv && contentDiv.innerHTML) {
+            let content = contentDiv.innerHTML;
+            
+            // Escape special regex characters but keep spaces
+            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Convert spaces to match any whitespace
+            const searchPattern = escapedQuery.split(/\s+/).join('\\s+');
+            
+            // Create regex to match the exact sequence
+            const regex = new RegExp(`(${searchPattern})`, 'gi');
+            content = content.replace(regex, '<span class="search-highlight">$1</span>');
+            
+            contentDiv.innerHTML = content;
+        }
+    });
 }
 
 async function markState(marking) {
@@ -532,4 +597,125 @@ async function saveNotes() {
     } catch (error) {
         console.error('Error saving notes:', error);
     }
+}
+
+async function searchStateContent(query) {
+    try {
+        currentSearchQuery = query;
+        
+        if (!query) {
+            loadStates(); // Reset to show all states
+            if (currentState) {
+                const response = await fetch(`/api/state/${currentState}`);
+                const data = await response.json();
+                parseAndDisplayContent(data.content);
+            }
+            return;
+        }
+
+        const response = await fetch(`/api/search_content?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        // Store search results for later use
+        searchResults = data.content;
+        
+        // Update state list to show only matching states
+        const stateList = document.getElementById('stateList');
+        stateList.innerHTML = '';
+        
+        const markingsResponse = await fetch('/api/markings');
+        const markingsData = await markingsResponse.json();
+        
+        data.states.forEach(state => {
+            const item = document.createElement('a');
+            item.href = '#';
+            item.className = 'list-group-item list-group-item-action';
+            item.textContent = state;
+            
+            if (state in markingsData.markings) {
+                const marking = markingsData.markings[state];
+                item.textContent = `[${marking}] ${state}`;
+                item.classList.add(`state-${marking.toLowerCase()}`);
+            }
+            
+            item.addEventListener('click', () => {
+                loadState(state, true); // true indicates this is from search results
+            });
+            stateList.appendChild(item);
+        });
+
+        if (data.states.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.className = 'list-group-item text-muted';
+            noResults.textContent = 'No states found containing the search text';
+            stateList.appendChild(noResults);
+        }
+
+    } catch (error) {
+        console.error('Error searching state content:', error);
+    }
+}
+
+function displayContentWithHighlights(content, query) {
+    // Split content into sections
+    const lines = content.split('\n');
+    const sections = {
+        'REQUISITI DELLE COPPIE ADOTTANTI': 'requisiti-coppie',
+        'REQUISITI DEI MINORI ADOTTANDI': 'requisiti-minori',
+        'PASSAGGI DELLA PROCEDURA': 'passaggi',
+        'POST ADOZIONE': 'post-adozione',
+        'NOTE': 'note'
+    };
+    
+    let currentSection = null;
+    let currentContent = [];
+    
+    // Process content into sections
+    for (const line of lines) {
+        if (line.trim() in sections) {
+            if (currentSection) {
+                // Display the completed section
+                const sectionId = sections[currentSection];
+                const contentDiv = document.querySelector(`#${sectionId} .content-section`);
+                if (contentDiv) {
+                    let sectionContent = currentContent.join('\n');
+                    // Apply highlighting
+                    const searchTerms = query.split(/\s+/).filter(term => term.length > 0);
+                    searchTerms.forEach(term => {
+                        const regex = new RegExp(`(${term})`, 'gi');
+                        sectionContent = sectionContent.replace(regex, '<span class="search-highlight">$1</span>');
+                    });
+                    contentDiv.innerHTML = sectionContent;
+                }
+            }
+            currentSection = line.trim();
+            currentContent = [];
+        } else if (currentSection) {
+            currentContent.push(line);
+        }
+    }
+    
+    // Handle the last section
+    if (currentSection) {
+        const sectionId = sections[currentSection];
+        const contentDiv = document.querySelector(`#${sectionId} .content-section`);
+        if (contentDiv) {
+            let sectionContent = currentContent.join('\n');
+            // Apply highlighting
+            const searchTerms = query.split(/\s+/).filter(term => term.length > 0);
+            searchTerms.forEach(term => {
+                const regex = new RegExp(`(${term})`, 'gi');
+                sectionContent = sectionContent.replace(regex, '<span class="search-highlight">$1</span>');
+            });
+            contentDiv.innerHTML = sectionContent;
+        }
+    }
+
+    // Clear any sections that didn't have content
+    Object.values(sections).forEach(sectionId => {
+        const contentDiv = document.querySelector(`#${sectionId} .content-section`);
+        if (contentDiv && !contentDiv.innerHTML) {
+            contentDiv.innerHTML = '';
+        }
+    });
 }

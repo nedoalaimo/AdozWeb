@@ -153,6 +153,46 @@ body {
     border-radius: 2px;
 }
 
+.content-search-box {
+    position: relative;
+}
+
+.content-search-box .form-text {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+.content-search-box .btn-outline-secondary {
+    border-color: #ced4da;
+}
+
+.content-search-box .btn-outline-secondary:hover {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+    color: #212529;
+}
+
+/* Temporary search highlights */
+.temp-highlight {
+    background-color: #fff3cd;
+    padding: 2px 0;
+    border-radius: 2px;
+    animation: fadeHighlight 2s ease-in-out;
+}
+
+@keyframes fadeHighlight {
+    0% { background-color: #ffc107; }
+    100% { background-color: #fff3cd; }
+}
+
+/* Search term highlighting */
+.search-highlight {
+    background-color: #ffeb3b;
+    padding: 2px;
+    border-radius: 2px;
+    transition: background-color 0.3s ease;
+}
+
 /* Responsive styles */
 @media (max-width: 768px) {
     body {

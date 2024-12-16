@@ -13,7 +13,16 @@
             <!-- Left Panel -->
             <div class="col-md-4 left-panel">
                 <div class="search-box mb-3">
-                    <input type="text" class="form-control" id="searchBox" placeholder="Search states...">
+                    <input type="text" class="form-control" id="searchBox" placeholder="Search state names...">
+                </div>
+                <div class="content-search-box mb-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="contentSearchBox" placeholder="Search in state content...">
+                        <button class="btn btn-outline-secondary" type="button" id="clearContentSearch">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">Search for text within state content</div>
                 </div>
                 <div class="state-list mb-3">
                     <div class="list-group" id="stateList"></div>
