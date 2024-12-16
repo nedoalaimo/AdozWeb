@@ -28,6 +28,3 @@ POST ADOZIONE:
 Normativa di riferimento
 - Loi n° 1958-27 du 4 mars 1958, relative à la tutelle publique, à la tutelle officieuse et à l’adoption modifiée par la loi n° 1959-69 du 19 juin 1959;
 - Loi n° 1995-92 du 9 novembre 1995, relative à la publication du code de la protection de l'enfant.
-
-NOTE:
-Non permette adozioni internazionali al momento

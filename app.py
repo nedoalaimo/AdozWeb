@@ -1,8 +1,9 @@
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, send_file
 from pathlib import Path
 import json
 import os
 import re
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
@@ -14,13 +15,94 @@ def load_markings():
     try:
         with open(MARKINGS_FILE, 'r') as f:
             data = json.load(f)
+            if 'notes' not in data:  # Add notes field if not present
+                data['notes'] = {}
             return data
     except FileNotFoundError:
-        return {'markings': {}, 'highlights': {}}
+        return {'markings': {}, 'highlights': {}, 'notes': {}}
 
 def save_markings(data):
     with open(MARKINGS_FILE, 'w') as f:
         json.dump(data, f, indent=4)
+
+def parse_state_file(content, state_notes=None):
+    """Parse state file content into structured sections."""
+    sections = {
+        'STATO': '',
+        'REQUISITI DELLE COPPIE ADOTTANTI': '',
+        'REQUISITI DEI MINORI ADOTTANDI': '',
+        'PASSAGGI DELLA PROCEDURA': '',
+        'EFFETTI DELL\'ADOZIONE': '',
+        'POST ADOZIONE': '',
+        'NOTE': ''
+    }
+    
+    # Split content into lines and clean them
+    lines = [line.strip() for line in content.split('\n') if line.strip()]
+    
+    # Find all section positions
+    current_section = None
+    current_content = []
+    
+    for i, line in enumerate(lines):
+        # Check if this line is a main section header
+        found_section = None
+        for section in sections.keys():
+            if line == section + ':':  # Exact match for section header
+                found_section = section
+                break
+        
+        if found_section:
+            # Save content of previous section if exists
+            if current_section and current_content:
+                sections[current_section] = '\n'.join(current_content).strip()
+            current_section = found_section
+            current_content = []
+        elif current_section:
+            # Add line to current section
+            current_content.append(line)
+    
+    # Add the last section's content
+    if current_section and current_content:
+        sections[current_section] = '\n'.join(current_content).strip()
+    
+    # Clean up empty sections
+    sections = {k: v for k, v in sections.items() if v}
+    
+    # If we have notes from state_markings.json, use those instead of file content
+    if state_notes:
+        if state_notes.strip():
+            sections['NOTE'] = state_notes
+        elif 'NOTE' in sections:
+            del sections['NOTE']
+    
+    # Move legal provisions and procedural details from NOTE to appropriate sections
+    if 'NOTE' in sections:
+        note_content = sections['NOTE']
+        
+        # Look for legal provisions (articles, codes)
+        legal_pattern = r'(?:art\.|articolo|comma)\s*\d+'
+        if re.search(legal_pattern, note_content, re.IGNORECASE):
+            if 'EFFETTI DELL\'ADOZIONE' not in sections:
+                sections['EFFETTI DELL\'ADOZIONE'] = ''
+            
+            # Move content containing legal references to EFFETTI DELL'ADOZIONE
+            legal_lines = [line.strip() for line in note_content.split('\n') 
+                         if re.search(legal_pattern, line, re.IGNORECASE)]
+            
+            if legal_lines:
+                sections['EFFETTI DELL\'ADOZIONE'] += '\n'.join(legal_lines)
+                
+                # Remove moved lines from NOTE
+                remaining_lines = [line.strip() for line in note_content.split('\n') 
+                                if line.strip() and line.strip() not in legal_lines]
+                sections['NOTE'] = '\n'.join(remaining_lines)
+        
+        # If NOTE section is empty after moving content, remove it
+        if not sections['NOTE'].strip():
+            del sections['NOTE']
+            
+    return sections
 
 @app.route('/')
 def index():
@@ -42,7 +124,36 @@ def get_state(state):
         file_path = STATI_DIR / f"{state}.txt"
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
+            
+        # Get notes from state_markings.json
+        markings_data = load_markings()
+        state_notes = markings_data.get('notes', {}).get(state, '')
+            
+        # Parse the content into sections, using notes from state_markings.json
+        parsed_content = parse_state_file(content, state_notes)
+        
         return jsonify({'content': content})
+    except FileNotFoundError:
+        return jsonify({'error': 'State not found'}), 404
+
+@app.route('/api/state/<state>/structured')
+def get_structured_state(state):
+    try:
+        file_path = STATI_DIR / f"{state}.txt"
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        # Get notes from state_markings.json
+        markings_data = load_markings()
+        state_notes = markings_data.get('notes', {}).get(state, '')
+            
+        # Parse the content into sections, using notes from state_markings.json
+        parsed_content = parse_state_file(content, state_notes)
+                
+        return jsonify({
+            'raw_content': content,
+            'parsed_content': parsed_content
+        })
     except FileNotFoundError:
         return jsonify({'error': 'State not found'}), 404
 
@@ -173,27 +284,55 @@ def save_notes():
     if not state:
         return jsonify({'error': 'Missing state'}), 400
     
-    file_path = STATI_DIR / f"{state}.txt"
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Split content and get everything before NOTE
-        if "\nNOTE:" in content:
-            main_content = content.split("\nNOTE:")[0]
-        else:
-            main_content = content
-        
-        # Write back content with new notes
-        with open(file_path, 'w', encoding='utf-8') as f:
-            if notes.strip():
-                f.write(f"{main_content.rstrip()}\n\nNOTE:\n{notes.strip()}")
-            else:
-                f.write(main_content.rstrip())
-        
+        markings = load_markings()
+        markings['notes'][state] = notes.strip() if notes else ""
+        save_markings(markings)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/download_markings')
+def download_markings():
+    try:
+        return send_file(
+            MARKINGS_FILE,
+            mimetype='application/json',
+            as_attachment=True,
+            download_name='state_markings.json'
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/upload_markings', methods=['POST'])
+def upload_markings():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if file and file.filename.endswith('.json'):
+        try:
+            content = json.loads(file.read())
+            # Validate the structure
+            required_keys = {'markings', 'highlights'}
+            if not all(key in content for key in required_keys):
+                return jsonify({'error': 'Invalid file structure'}), 400
+            
+            # Add notes field if not present
+            if 'notes' not in content:
+                content['notes'] = {}
+            
+            # Save the uploaded file
+            save_markings(content)
+            return jsonify({'success': True})
+        except json.JSONDecodeError:
+            return jsonify({'error': 'Invalid JSON file'}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    return jsonify({'error': 'Invalid file type'}), 400
 
 @app.route('/api/search_content', methods=['GET'])
 def search_content():

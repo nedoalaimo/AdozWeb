@@ -236,26 +236,34 @@ async function loadState(state, fromSearch = false) {
         currentState = state;
         document.getElementById('stateHeader').textContent = state;
         
+        // Load state content
         const response = await fetch(`/api/state/${state}`);
+        if (!response.ok) throw new Error('Failed to load state');
         const data = await response.json();
         
-        if (data.error) {
-            console.error(data.error);
-            return;
-        }
-        
-        // First, parse and display content normally
+        // Update content
         parseAndDisplayContent(data.content);
         
-        // Then, if there's a search query active, highlight the terms
-        const searchBox = document.getElementById('contentSearchBox');
-        const searchQuery = searchBox.value.trim();
-        if (searchQuery) {
-            highlightSearchTerms(searchQuery);
-        }
-
-        // Load and apply highlights
+        // Load notes
+        await loadNotes(state);
+        
+        // Update badges
+        updateBadges(state);
+        
+        // Update active state in list
+        document.querySelectorAll('.state-item').forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.state === state) {
+                item.classList.add('active');
+                if (!fromSearch) {
+                    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+        });
+        
+        // Apply stored highlights
         const markingsResponse = await fetch('/api/markings');
+        if (!markingsResponse.ok) throw new Error('Failed to load markings');
         const markingsData = await markingsResponse.json();
         
         if (markingsData.highlights && markingsData.highlights[state]) {
@@ -263,18 +271,17 @@ async function loadState(state, fromSearch = false) {
                 applyStoredHighlight(highlight);
             });
         }
-
-        // Update badges
-        updateBadges(state);
     } catch (error) {
         console.error('Error loading state:', error);
     }
 }
 
 function parseAndDisplayContent(content) {
-    // Clear all sections
-    Object.values(sections).forEach(id => {
-        document.querySelector(`#${id} .content-section`).innerHTML = '';
+    // Clear all sections except notes (which are handled by loadNotes)
+    Object.entries(sections).forEach(([sectionName, id]) => {
+        if (sectionName !== 'NOTE') {
+            document.querySelector(`#${id} .content-section`).innerHTML = '';
+        }
     });
     
     // Parse content
@@ -283,23 +290,26 @@ function parseAndDisplayContent(content) {
     
     const lines = content.split('\n');
     for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+        
         // Handle state header
-        if (line.startsWith('STATO:')) {
-            document.getElementById('stateHeader').textContent = line;
+        if (trimmedLine.startsWith('STATO:')) {
+            document.getElementById('stateHeader').textContent = trimmedLine;
             continue;
         }
         
-        // Check for section headers
+        // Check for section headers (exact match)
         let newSection = null;
         for (const [sectionName, sectionId] of Object.entries(sections)) {
-            if (line.includes(sectionName)) {
+            if (trimmedLine === sectionName + ':') {
                 newSection = sectionName;
                 break;
             }
         }
         
         if (newSection) {
-            if (currentSection) {
+            if (currentSection && currentSection !== 'NOTE') {
                 document.querySelector(`#${sections[currentSection]} .content-section`).innerHTML = 
                     `<div class="content-text">${sectionContent}</div>`;
             }
@@ -308,17 +318,21 @@ function parseAndDisplayContent(content) {
             continue;
         }
         
-        if (currentSection) {
-            if (line.startsWith('- ')) {
-                sectionContent += `<div class="bullet-point">• ${line.substring(2)}</div>`;
-            } else if (line) {
-                sectionContent += `<div class="text-line">${line}</div>`;
+        if (currentSection && currentSection !== 'NOTE') {
+            // Handle bullet points and regular lines
+            if (trimmedLine.startsWith('- ')) {
+                sectionContent += `<div class="bullet-point">• ${trimmedLine.substring(2)}</div>`;
+            } else if (trimmedLine.endsWith(':') && !trimmedLine.startsWith('STATO:')) {
+                // Handle subsection headers
+                sectionContent += `<div class="subsection-header">${trimmedLine}</div>`;
+            } else if (trimmedLine) {
+                sectionContent += `<div class="text-line">${trimmedLine}</div>`;
             }
         }
     }
     
     // Save the last section
-    if (currentSection) {
+    if (currentSection && currentSection !== 'NOTE') {
         document.querySelector(`#${sections[currentSection]} .content-section`).innerHTML = 
             `<div class="content-text">${sectionContent}</div>`;
     }
@@ -699,6 +713,19 @@ function updateBadges(state) {
         .catch(error => console.error('Error updating badges:', error));
 }
 
+async function loadNotes(state) {
+    fetch('/api/markings')
+        .then(response => response.json())
+        .then(data => {
+            const notes = data.notes && data.notes[state] ? data.notes[state] : '';
+            const noteSection = document.querySelector('#note .content-section');
+            if (noteSection) {
+                noteSection.innerHTML = `<div class="content-text">${notes}</div>`;
+            }
+        })
+        .catch(error => console.error('Error loading notes:', error));
+}
+
 async function saveNotes() {
     const notesSection = document.querySelector('#note .content-section');
     const notes = notesSection.innerHTML;
@@ -846,4 +873,36 @@ function displayContentWithHighlights(content, query) {
             contentDiv.innerHTML = '';
         }
     });
+}
+
+function downloadMarkings() {
+    window.location.href = '/api/download_markings';
+}
+
+async function uploadMarkingsFile(input) {
+    if (!input.files || !input.files[0]) return;
+    
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    
+    try {
+        const response = await fetch('/api/upload_markings', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Upload failed');
+        
+        // Reload the current state to refresh highlights and notes
+        if (currentState) {
+            await loadState(currentState);
+        }
+        
+        // Clear the file input
+        input.value = '';
+    } catch (error) {
+        console.error('Error uploading markings:', error);
+        alert('Failed to upload markings file: ' + error.message);
+    }
 }

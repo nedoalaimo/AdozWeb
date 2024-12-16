@@ -34,6 +34,15 @@
                         <button class="btn btn-danger" onclick="markState('NO')">NO</button>
                     </div>
                 </div>
+                <div class="backup-buttons mt-3">
+                    <div class="btn-group w-100" role="group">
+                        <button class="btn btn-secondary" onclick="downloadMarkings()">Download Markings</button>
+                        <label class="btn btn-secondary" for="uploadMarkings">
+                            Upload Markings
+                            <input type="file" id="uploadMarkings" accept=".json" style="display: none;" onchange="uploadMarkingsFile(this)">
+                        </label>
+                    </div>
+                </div>
             </div>
 
             <!-- Right Panel -->
