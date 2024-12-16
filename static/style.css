@@ -1,0 +1,143 @@
+body {
+    padding: 20px;
+    height: 100vh;
+    overflow-y: hidden;
+}
+
+.container-fluid {
+    height: calc(100vh - 40px);
+}
+
+.row {
+    height: 100%;
+}
+
+.left-panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+}
+
+.right-panel {
+    height: 100%;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+.state-list {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.list-group-item {
+    cursor: pointer;
+}
+
+.list-group-item:hover {
+    background-color: #f0f0f0;
+}
+
+.list-group-item.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.highlight-buttons {
+    padding: 10px 0;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.highlight-btn {
+    font-weight: bold;
+    color: black;
+    border: 1px solid #dee2e6;
+    margin: 0 5px;
+}
+
+.highlight-btn:hover {
+    border: 2px solid #666;
+}
+
+.tab-content {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.content-section {
+    min-height: 200px;
+    padding: 15px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background-color: white;
+}
+
+.content-text {
+    line-height: 1.5;
+}
+
+.bullet-point {
+    padding-left: 20px;
+    margin-bottom: 5px;
+}
+
+.text-line {
+    margin-bottom: 5px;
+}
+
+.content-section[contenteditable="true"] {
+    background-color: #fff;
+}
+
+.content-section[contenteditable="true"]:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Marking colors */
+.state-ok {
+    background-color: #90EE90 !important;
+    color: black !important;
+}
+
+.state-maybe {
+    background-color: #FFFF00 !important;
+    color: black !important;
+}
+
+.state-no {
+    background-color: #FFB6C1 !important;
+    color: black !important;
+}
+
+/* Highlight colors */
+.highlight-yellow {
+    background-color: #FFFF00 !important;
+    color: black !important;
+}
+
+.highlight-green {
+    background-color: #90EE90 !important;
+    color: black !important;
+}
+
+.highlight-red {
+    background-color: #FFB6C1 !important;
+    color: black !important;
+}
+
+.highlight-blue {
+    background-color: #ADD8E6 !important;
+    color: black !important;
+}
+
+/* Make sure highlights are visible */
+.content-section span[class^="highlight-"] {
+    display: inline;
+    padding: 2px 0;
+    border-radius: 2px;
+}
