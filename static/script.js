@@ -424,9 +424,17 @@ async function onHighlightButtonClick(color) {
         return;
     }
 
+    // Store the selection range immediately
+    const range = selection.getRangeAt(0);
+    const selectionData = getSelectedText();
+    
+    if (!selectionData) {
+        console.log('No valid text selected');
+        return;
+    }
+
     // For removing highlights
     if (color === 'none') {
-        const range = selection.getRangeAt(0);
         let node = range.commonAncestorContainer;
 
         // If we're on a text node, get its parent
@@ -495,15 +503,8 @@ async function onHighlightButtonClick(color) {
         return;
     }
 
-    // For adding highlights
-    const selectionData = getSelectedText();
-    if (!selectionData) {
-        console.log('No valid text selected');
-        return;
-    }
-    
     try {
-        // Store the selection data before clearing it
+        // Store the highlight data
         const highlightData = {
             section: selectionData.section,
             start: selectionData.start,
@@ -511,12 +512,12 @@ async function onHighlightButtonClick(color) {
             text: selectionData.text.trim(),
             color: color
         };
-        
-        // Now we can safely clear the selection
-        window.getSelection().removeAllRanges();
-        
-        // Apply the highlight using the stored data
+
+        // Apply the highlight first
         await applyHighlight(highlightData.color, highlightData);
+        
+        // Only clear the selection after highlight is applied
+        window.getSelection().removeAllRanges();
     } catch (error) {
         console.error('Error in highlight button click handler:', error);
     }
