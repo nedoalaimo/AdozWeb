@@ -587,7 +587,6 @@ function applyStoredHighlight(highlight) {
 function updateBadges(state) {
     // Hide all badges first
     document.querySelectorAll('.highlight-badge').forEach(badge => badge.classList.add('d-none'));
-    document.querySelector('.note-badge').classList.add('d-none');
 
     // If no state is selected, return
     if (!state) return;
@@ -616,7 +615,7 @@ function updateBadges(state) {
             // Check for notes
             const noteSection = document.querySelector('#note .content-section');
             if (noteSection && noteSection.textContent.trim()) {
-                const noteBadge = document.querySelector('.note-badge');
+                const noteBadge = document.querySelector('a[href="#note"] .highlight-badge');
                 if (noteBadge) noteBadge.classList.remove('d-none');
             }
         })
