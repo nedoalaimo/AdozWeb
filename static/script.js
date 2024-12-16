@@ -7,6 +7,46 @@ const sections = {
     'NOTE': 'note'
 };
 
+let serverWarmupTimeout;
+let keepAliveInterval;
+
+// Function to start the keep-alive ping
+function startKeepAlive() {
+    // Clear any existing interval
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
+    
+    // Ping the server every 4 minutes to keep it alive
+    keepAliveInterval = setInterval(() => {
+        fetch('/ping')
+            .catch(error => console.log('Keep-alive ping failed:', error));
+    }, 240000); // 4 minutes
+}
+
+// Function to show loading state
+function showLoadingState() {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'server-warming';
+    loadingDiv.innerHTML = `
+        <div class="loading-message">
+            <p>Il server si sta avviando...</p>
+            <p>Questo potrebbe richiedere fino a 50 secondi.</p>
+            <div class="loading-spinner"></div>
+        </div>
+    `;
+    document.body.appendChild(loadingDiv);
+}
+
+// Function to hide loading state
+function hideLoadingState() {
+    const loadingDiv = document.getElementById('server-warming');
+    if (loadingDiv) {
+        loadingDiv.remove();
+    }
+    if (serverWarmupTimeout) {
+        clearTimeout(serverWarmupTimeout);
+    }
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     loadStates();
@@ -57,31 +97,43 @@ function setupEventListeners() {
 
 async function loadStates() {
     try {
+        showLoadingState();
+        serverWarmupTimeout = setTimeout(() => {
+            // Only show the loading state if the request takes more than 1 second
+        }, 1000);
+
         const response = await fetch('/api/states');
-        const states = await response.json();
-        const markingsResponse = await fetch('/api/markings');
-        const markingsData = await markingsResponse.json();
+        hideLoadingState();
         
-        const stateList = document.getElementById('stateList');
-        stateList.innerHTML = '';
-        
-        states.forEach(state => {
-            const item = document.createElement('a');
-            item.href = '#';
-            item.className = 'list-group-item list-group-item-action';
-            item.textContent = state;
+        if (response.ok) {
+            const states = await response.json();
+            // Start keep-alive after successful connection
+            startKeepAlive();
+            const markingsResponse = await fetch('/api/markings');
+            const markingsData = await markingsResponse.json();
             
-            if (state in markingsData.markings) {
-                const marking = markingsData.markings[state];
-                item.textContent = `[${marking}] ${state}`;
-                item.classList.add(`state-${marking.toLowerCase()}`);
-            }
+            const stateList = document.getElementById('stateList');
+            stateList.innerHTML = '';
             
-            item.addEventListener('click', () => loadState(state));
-            stateList.appendChild(item);
-        });
+            states.forEach(state => {
+                const item = document.createElement('a');
+                item.href = '#';
+                item.className = 'list-group-item list-group-item-action';
+                item.textContent = state;
+                
+                if (state in markingsData.markings) {
+                    const marking = markingsData.markings[state];
+                    item.textContent = `[${marking}] ${state}`;
+                    item.classList.add(`state-${marking.toLowerCase()}`);
+                }
+                
+                item.addEventListener('click', () => loadState(state));
+                stateList.appendChild(item);
+            });
+        }
     } catch (error) {
         console.error('Error loading states:', error);
+        hideLoadingState();
     }
 }
 

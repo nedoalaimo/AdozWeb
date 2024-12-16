@@ -278,6 +278,11 @@ def search_state_content(state):
     except FileNotFoundError:
         return jsonify({'error': 'State not found'}), 404
 
+@app.route('/ping')
+def ping():
+    """Endpoint to keep the server alive"""
+    return jsonify({"status": "ok"})
+
 if __name__ == '__main__':
     # Use environment variables for configuration
     port = int(os.environ.get('PORT', 5000))
