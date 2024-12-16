@@ -58,6 +58,11 @@ let lastContentSearch = '';
 let currentSearchQuery = '';
 let searchResults = {};
 
+let isSelecting = false;
+let selectionTimeout;
+
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
 function setupEventListeners() {
     // Search box for state names
     document.getElementById('searchBox').addEventListener('input', filterStates);
@@ -94,27 +99,83 @@ function setupEventListeners() {
         btn.addEventListener('click', () => onHighlightButtonClick(btn.dataset.color));
     });
 
-    // Add touch event handling for mobile devices
-    let touchTimeout;
-    const contentSections = document.querySelectorAll('.content-section');
-    contentSections.forEach(section => {
-        section.addEventListener('touchend', (e) => {
-            // Clear any existing timeout
-            if (touchTimeout) clearTimeout(touchTimeout);
-            
-            // Wait a brief moment for the selection to be created
-            touchTimeout = setTimeout(() => {
-                const selection = window.getSelection();
-                if (selection && selection.toString().trim()) {
-                    // Show highlight buttons if text is selected
+    if (isMobile) {
+        // Mobile-specific event handlers
+        const contentSections = document.querySelectorAll('.content-section');
+        contentSections.forEach(section => {
+            // Handle selection start
+            section.addEventListener('touchstart', (e) => {
+                isSelecting = true;
+                if (selectionTimeout) {
+                    clearTimeout(selectionTimeout);
+                }
+            }, { passive: true });
+
+            // Handle selection end
+            section.addEventListener('touchend', (e) => {
+                if (!isSelecting) return;
+                
+                // Wait for iOS to complete the selection
+                selectionTimeout = setTimeout(() => {
+                    const selection = window.getSelection();
+                    const selectedText = selection ? selection.toString().trim() : '';
+                    
+                    if (selectedText) {
+                        // Show the highlight buttons
+                        const highlightButtons = document.querySelector('.highlight-buttons');
+                        if (highlightButtons) {
+                            highlightButtons.style.display = 'block';
+                            // Ensure the content doesn't scroll under the buttons
+                            const contentHeight = document.querySelector('.right-panel').offsetHeight;
+                            const buttonsHeight = highlightButtons.offsetHeight;
+                            document.querySelector('.right-panel').style.paddingBottom = `${buttonsHeight}px`;
+                        }
+                    }
+                    isSelecting = false;
+                }, 300);
+            }, { passive: true });
+        });
+
+        // Handle selection clearing on mobile
+        document.addEventListener('selectionchange', () => {
+            const selection = window.getSelection();
+            if (!selection || !selection.toString().trim()) {
+                const highlightButtons = document.querySelector('.highlight-buttons');
+                if (highlightButtons) {
+                    highlightButtons.style.display = 'none';
+                    // Reset content padding
+                    document.querySelector('.right-panel').style.paddingBottom = '';
+                }
+            }
+        });
+    } else {
+        // Desktop-specific event handlers
+        const contentSections = document.querySelectorAll('.content-section');
+        contentSections.forEach(section => {
+            section.addEventListener('mouseup', () => {
+                setTimeout(() => {
+                    const selection = window.getSelection();
+                    const selectedText = selection ? selection.toString().trim() : '';
                     const highlightButtons = document.querySelector('.highlight-buttons');
-                    if (highlightButtons) {
+                    
+                    if (selectedText && highlightButtons) {
                         highlightButtons.style.display = 'block';
                     }
-                }
-            }, 200);
+                }, 10);
+            });
         });
-    });
+
+        // Hide highlight buttons when clicking outside of content or buttons
+        document.addEventListener('mousedown', (e) => {
+            if (!e.target.closest('.content-section') && 
+                !e.target.closest('.highlight-buttons')) {
+                const highlightButtons = document.querySelector('.highlight-buttons');
+                if (highlightButtons) {
+                    highlightButtons.style.display = 'none';
+                }
+            }
+        });
+    }
 }
 
 async function loadStates() {
@@ -310,22 +371,10 @@ async function markState(marking) {
 }
 
 function getSelectedText() {
-    // Try to get selection from different sources
-    const selection = window.getSelection() || document.selection;
-    if (!selection) return null;
+    const selection = window.getSelection();
+    if (!selection || !selection.toString().trim()) return null;
     
-    let range;
-    let node;
-    
-    // Handle different selection types
-    if (selection.type === 'Range' || selection.rangeCount) {
-        // Modern browsers
-        range = selection.rangeCount ? selection.getRangeAt(0) : selection.createRange();
-        node = range.commonAncestorContainer;
-    } else {
-        // No valid selection
-        return null;
-    }
+    let node = selection.anchorNode;
     
     // If we're on a text node, get its parent
     if (node.nodeType === Node.TEXT_NODE) {
@@ -349,26 +398,13 @@ function getSelectedText() {
         }
     }
     
-    // Get the selected text
-    let selectedText;
-    if (selection.toString) {
-        selectedText = selection.toString();
-    } else if (selection.text) {
-        selectedText = selection.text;
-    } else {
-        return null;
-    }
-    
-    // Ensure we have valid text
-    selectedText = selectedText.trim();
+    const selectedText = selection.toString().trim();
     if (!selectedText) return null;
     
     // Get the text content up to the start and end positions
     const fullText = contentSection.textContent;
-    
-    // Find the actual start position in the full text
     const start = fullText.indexOf(selectedText);
-    if (start === -1) return null;  // Text not found
+    if (start === -1) return null;
     
     const end = start + selectedText.length;
     
