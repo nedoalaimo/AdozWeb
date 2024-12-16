@@ -120,6 +120,49 @@ def add_highlight():
         print('Traceback:', traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/remove_highlight', methods=['POST'])
+def remove_highlight():
+    try:
+        data = request.get_json()
+        state = data.get('state')
+        section = data.get('section')
+        start = data.get('start')
+        end = data.get('end')
+
+        if not all([state, section, start is not None, end is not None]):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        # Load current markings
+        with open('state_markings.json', 'r', encoding='utf-8') as f:
+            markings = json.load(f)
+
+        # Find and remove the highlight
+        if state in markings['highlights']:
+            highlights = markings['highlights'][state]
+            # Find highlight by matching section, start, and end positions
+            for i, highlight in enumerate(highlights):
+                if (highlight['section'] == section and 
+                    highlight['start'] == start and 
+                    highlight['end'] == end):
+                    del highlights[i]
+                    break
+
+            # Remove empty highlight lists
+            if not highlights:
+                del markings['highlights'][state]
+            else:
+                markings['highlights'][state] = highlights
+
+            # Save updated markings
+            with open('state_markings.json', 'w', encoding='utf-8') as f:
+                json.dump(markings, f, indent=4, ensure_ascii=False)
+
+        return jsonify({'status': 'success'})
+
+    except Exception as e:
+        print('Error in remove_highlight:', str(e))
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/save_notes', methods=['POST'])
 def save_notes():
     data = request.json

@@ -86,6 +86,9 @@ async function loadState(state) {
                 applyStoredHighlight(highlight);
             });
         }
+
+        // Update badges after loading state
+        updateBadges(state);
     } catch (error) {
         console.error('Error loading state:', error);
     }
@@ -220,18 +223,127 @@ function getSelectedText() {
     };
 }
 
-async function applyHighlight(color, selectionData = null) {
-    if (!currentState) {
-        console.error('No state selected');
+async function onHighlightButtonClick(color) {
+    console.log('Highlight button clicked:', color);
+    const selection = window.getSelection();
+    if (!selection.rangeCount) {
+        console.log('No text selected');
+        return;
+    }
+
+    // For removing highlights
+    if (color === 'none') {
+        const range = selection.getRangeAt(0);
+        let node = range.commonAncestorContainer;
+
+        // If we're on a text node, get its parent
+        if (node.nodeType === Node.TEXT_NODE) {
+            node = node.parentNode;
+        }
+
+        // Find the highlight span that contains the selection
+        while (node && (!node.classList || !Array.from(node.classList).some(c => c.startsWith('highlight-')))) {
+            node = node.parentNode;
+            if (!node || node.classList === undefined) break;
+        }
+
+        // If we found a highlight span, remove only that one
+        if (node && node.classList && Array.from(node.classList).some(c => c.startsWith('highlight-'))) {
+            const tabPane = node.closest('.tab-pane');
+            if (!tabPane) return;
+
+            // Get section name from tab ID
+            const sectionId = tabPane.id;
+            let sectionName = '';
+            for (const [name, id] of Object.entries(sections)) {
+                if (id === sectionId) {
+                    sectionName = name;
+                    break;
+                }
+            }
+
+            // Find the start and end positions
+            const contentSection = tabPane.querySelector('.content-section');
+            const fullText = contentSection.textContent;
+            const text = node.textContent;
+            const start = fullText.indexOf(text);
+            const end = start + text.length;
+
+            // Remove highlight visually
+            const parent = node.parentNode;
+            while (node.firstChild) {
+                parent.insertBefore(node.firstChild, node);
+            }
+            parent.removeChild(node);
+            window.getSelection().removeAllRanges();
+
+            // Remove highlight from server
+            try {
+                const response = await fetch('/api/remove_highlight', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        state: currentState,
+                        section: sectionName,
+                        start: start,
+                        end: end
+                    })
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to remove highlight from server');
+                }
+            } catch (error) {
+                console.error('Error removing highlight from server:', error);
+            }
+        }
+        return;
+    }
+
+    // For adding highlights
+    const selectionData = getSelectedText();
+    if (!selectionData) {
+        console.log('No valid text selected');
         return;
     }
     
-    const highlight = selectionData || getSelectedText();
+    try {
+        // Store the selection data before clearing it
+        const highlightData = {
+            section: selectionData.section,
+            start: selectionData.start,
+            end: selectionData.end,
+            text: selectionData.text.trim(),
+            color: color
+        };
+        
+        // Now we can safely clear the selection
+        window.getSelection().removeAllRanges();
+        
+        // Apply the highlight using the stored data
+        await applyHighlight(highlightData.color, highlightData);
+    } catch (error) {
+        console.error('Error in highlight button click handler:', error);
+    }
+
+    // After applying or removing highlight, update badges
+    updateBadges(currentState);
+}
+
+async function applyHighlight(color, selectionData = null) {
+    if (!currentState && !selectionData) {
+        console.error('No state selected');
+        return;
+    }
+
+    const highlight = selectionData;
     if (!highlight) {
         console.error('No text selected');
         return;
     }
-    
+
     const requestData = {
         state: currentState,
         highlight: {
@@ -242,9 +354,7 @@ async function applyHighlight(color, selectionData = null) {
             text: highlight.text
         }
     };
-    
-    console.log('Sending highlight request:', requestData);
-    
+
     try {
         const response = await fetch('/api/highlight', {
             method: 'POST',
@@ -253,9 +363,8 @@ async function applyHighlight(color, selectionData = null) {
             },
             body: JSON.stringify(requestData)
         });
-        
+
         const responseData = await response.json();
-        console.log('Server response:', responseData);
         
         if (response.ok) {
             // Apply the highlight visually
@@ -279,81 +388,127 @@ async function applyHighlight(color, selectionData = null) {
     }
 }
 
-async function onHighlightButtonClick(color) {
-    console.log('Highlight button clicked:', color);
-    const selection = getSelectedText();
-    if (!selection) {
-        console.log('No text selected');
-        return;
-    }
+function getAllTextNodes(node) {
+    const textNodes = [];
+    const walk = document.createTreeWalker(
+        node,
+        NodeFilter.SHOW_TEXT,
+        {
+            acceptNode: function(node) {
+                // Skip empty text nodes
+                if (node.textContent.trim() === '') {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        }
+    );
     
-    try {
-        // Store the selection data before clearing it
-        const highlightData = {
-            section: selection.section,
-            start: selection.start,
-            end: selection.end,
-            text: selection.text.trim(),
-            color: color
-        };
-        
-        // Now we can safely clear the selection
-        window.getSelection().removeAllRanges();
-        
-        // Apply the highlight using the stored data
-        await applyHighlight(highlightData.color, highlightData);
-    } catch (error) {
-        console.error('Error in highlight button click handler:', error);
+    let current;
+    while (current = walk.nextNode()) {
+        textNodes.push(current);
     }
+    return textNodes;
 }
 
 function applyStoredHighlight(highlight) {
     const sectionId = sections[highlight.section];
     if (!sectionId) return;
     
-    const contentSection = document.querySelector(`#${sectionId} .content-section .content-text`);
+    const contentSection = document.querySelector(`#${sectionId} .content-section`);
     if (!contentSection) return;
     
     const text = contentSection.textContent;
-    const before = text.substring(0, highlight.start);
-    const highlighted = text.substring(highlight.start, highlight.end);
-    const after = text.substring(highlight.end);
-    
-    // Find the HTML elements that contain the text
-    const elements = Array.from(contentSection.children);
-    let currentPos = 0;
-    let newHtml = '';
-    
-    for (const element of elements) {
-        const elementText = element.textContent;
-        const elementEnd = currentPos + elementText.length;
+    if (!text) return;
+
+    // Find the text node containing our target text
+    const range = document.createRange();
+    const textNodes = getAllTextNodes(contentSection);
+    let currentOffset = 0;
+    let startNode = null;
+    let startNodeOffset = 0;
+    let endNode = null;
+    let endNodeOffset = 0;
+
+    // Find start and end nodes
+    for (const node of textNodes) {
+        const nodeLength = node.textContent.length;
         
-        if (highlight.start >= currentPos && highlight.start < elementEnd) {
-            // This element contains the start of the highlight
-            const beforeHighlight = elementText.substring(0, highlight.start - currentPos);
-            const highlightedText = elementText.substring(highlight.start - currentPos, 
-                Math.min(highlight.end - currentPos, elementText.length));
-            const afterHighlight = elementText.substring(Math.min(highlight.end - currentPos, elementText.length));
-            
-            newHtml += `<div class="${element.className}">${beforeHighlight}<span class="highlight-${highlight.color}">${highlightedText}</span>${afterHighlight}</div>`;
-        } else if (highlight.end > currentPos && highlight.start < currentPos) {
-            // This element is entirely within the highlight
-            newHtml += `<div class="${element.className}"><span class="highlight-${highlight.color}">${elementText}</span></div>`;
-        } else {
-            // This element is outside the highlight
-            newHtml += element.outerHTML;
+        if (!startNode && currentOffset + nodeLength > highlight.start) {
+            startNode = node;
+            startNodeOffset = highlight.start - currentOffset;
         }
         
-        currentPos += elementText.length;
+        if (!endNode && currentOffset + nodeLength >= highlight.end) {
+            endNode = node;
+            endNodeOffset = highlight.end - currentOffset;
+            break;
+        }
+        
+        currentOffset += nodeLength;
     }
-    
-    contentSection.innerHTML = newHtml;
+
+    if (!startNode || !endNode) return;
+
+    // Create and position the range
+    range.setStart(startNode, startNodeOffset);
+    range.setEnd(endNode, endNodeOffset);
+
+    // Create highlight span
+    const span = document.createElement('span');
+    span.className = `highlight-${highlight.color}`;
+
+    // Preserve the original HTML structure
+    const fragment = range.extractContents();
+    span.appendChild(fragment);
+    range.insertNode(span);
+
+    // Clean up any empty text nodes
+    contentSection.normalize();
+}
+
+function updateBadges(state) {
+    // Hide all badges first
+    document.querySelectorAll('.highlight-badge').forEach(badge => badge.classList.add('d-none'));
+    document.querySelector('.note-badge').classList.add('d-none');
+
+    // If no state is selected, return
+    if (!state) return;
+
+    // Get the markings data
+    fetch('/api/markings')
+        .then(response => response.json())
+        .then(markingsData => {
+            // Check for highlights
+            if (state in markingsData.highlights) {
+                const highlights = markingsData.highlights[state];
+                // Create a set of sections with highlights
+                const sectionsWithHighlights = new Set(highlights.map(h => h.section));
+                
+                // Show badges for sections with highlights
+                sectionsWithHighlights.forEach(sectionName => {
+                    const sectionId = sections[sectionName];
+                    const link = document.querySelector(`a[href="#${sectionId}"]`);
+                    if (link) {
+                        const badge = link.querySelector('.highlight-badge');
+                        if (badge) badge.classList.remove('d-none');
+                    }
+                });
+            }
+
+            // Check for notes
+            const noteSection = document.querySelector('#note .content-section');
+            if (noteSection && noteSection.textContent.trim()) {
+                const noteBadge = document.querySelector('.note-badge');
+                if (noteBadge) noteBadge.classList.remove('d-none');
+            }
+        })
+        .catch(error => console.error('Error updating badges:', error));
 }
 
 async function saveNotes() {
-    if (!currentState) return;
-    
-    const notesContent = document.querySelector('#note .content-section').innerHTML;
+    const notesSection = document.querySelector('#note .content-section');
+    const notes = notesSection.innerHTML;
     
     try {
         const response = await fetch('/api/save_notes', {
@@ -363,15 +518,18 @@ async function saveNotes() {
             },
             body: JSON.stringify({
                 state: currentState,
-                notes: notesContent
+                notes: notes
             })
         });
         
         if (response.ok) {
-            alert('Notes saved successfully!');
+            console.log('Notes saved successfully');
+            // Update badges after saving notes
+            updateBadges(currentState);
+        } else {
+            console.error('Failed to save notes');
         }
     } catch (error) {
         console.error('Error saving notes:', error);
-        alert('Error saving notes. Please try again.');
     }
 }

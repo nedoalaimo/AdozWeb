@@ -69,7 +69,8 @@
         "Tunisia": "NO",
         "Repubblica Tunisina": "NO",
         "Uganda": "NO",
-        "Repubblica dell'Uganda": "NO"
+        "Repubblica dell'Uganda": "NO",
+        "Romania": "NO"
     },
     "highlights": {
         "Albania": [
@@ -85,7 +86,30 @@
                 "start": 224,
                 "end": 273,
                 "color": "green",
-                "text": "differenza di età con il minore di almeno 18 anni"
+                "text": "differenza di et\u00c3\u00a0 con il minore di almeno 18 anni"
+            }
+        ],
+        "Romania": [
+            {
+                "section": "REQUISITI DELLE COPPIE ADOTTANTI",
+                "start": 347,
+                "end": 387,
+                "color": "red",
+                "text": "parenti del minore entro il quarto grado"
+            },
+            {
+                "section": "REQUISITI DELLE COPPIE ADOTTANTI",
+                "start": 444,
+                "end": 481,
+                "color": "red",
+                "text": "cittadini rumeni residenti all\u2019estero"
+            },
+            {
+                "section": "REQUISITI DELLE COPPIE ADOTTANTI",
+                "start": 538,
+                "end": 579,
+                "color": "red",
+                "text": "coniuge del genitore biologico del minore"
             }
         ]
     }
