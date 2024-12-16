@@ -141,3 +141,82 @@ body {
     padding: 2px 0;
     border-radius: 2px;
 }
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    body {
+        overflow-y: auto;
+        height: auto;
+        padding: 10px;
+    }
+
+    .container-fluid {
+        height: auto;
+    }
+
+    .row {
+        height: auto;
+    }
+
+    .left-panel, .right-panel {
+        height: auto;
+        max-height: none;
+        overflow-y: visible;
+        padding: 10px;
+    }
+
+    .state-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .tab-content {
+        height: auto;
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .nav-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nav-tabs .nav-link {
+        white-space: nowrap;
+        font-size: 0.9em;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .highlight-buttons {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding: 10px 0;
+    }
+
+    .highlight-buttons .btn-group {
+        display: flex;
+        flex-wrap: nowrap;
+    }
+
+    .highlight-btn {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.9em;
+    }
+
+    .content-section {
+        min-height: 150px;
+    }
+}
+
+/* Additional tablet-specific adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .nav-tabs .nav-link {
+        font-size: 0.95em;
+        padding: 0.5rem 1rem;
+    }
+    
+    .left-panel, .right-panel {
+        padding: 12px;
+    }
+}
