@@ -93,6 +93,28 @@ function setupEventListeners() {
     document.querySelectorAll('.highlight-btn').forEach(btn => {
         btn.addEventListener('click', () => onHighlightButtonClick(btn.dataset.color));
     });
+
+    // Add touch event handling for mobile devices
+    let touchTimeout;
+    const contentSections = document.querySelectorAll('.content-section');
+    contentSections.forEach(section => {
+        section.addEventListener('touchend', (e) => {
+            // Clear any existing timeout
+            if (touchTimeout) clearTimeout(touchTimeout);
+            
+            // Wait a brief moment for the selection to be created
+            touchTimeout = setTimeout(() => {
+                const selection = window.getSelection();
+                if (selection && selection.toString().trim()) {
+                    // Show highlight buttons if text is selected
+                    const highlightButtons = document.querySelector('.highlight-buttons');
+                    if (highlightButtons) {
+                        highlightButtons.style.display = 'block';
+                    }
+                }
+            }, 200);
+        });
+    });
 }
 
 async function loadStates() {
@@ -288,17 +310,29 @@ async function markState(marking) {
 }
 
 function getSelectedText() {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return null;
+    // Try to get selection from different sources
+    const selection = window.getSelection() || document.selection;
+    if (!selection) return null;
     
-    const range = selection.getRangeAt(0);
-    let node = range.commonAncestorContainer;
+    let range;
+    let node;
+    
+    // Handle different selection types
+    if (selection.type === 'Range' || selection.rangeCount) {
+        // Modern browsers
+        range = selection.rangeCount ? selection.getRangeAt(0) : selection.createRange();
+        node = range.commonAncestorContainer;
+    } else {
+        // No valid selection
+        return null;
+    }
     
     // If we're on a text node, get its parent
     if (node.nodeType === Node.TEXT_NODE) {
         node = node.parentNode;
     }
     
+    // Find the content section
     const contentSection = node.closest('.content-section');
     if (!contentSection) return null;
     
@@ -315,22 +349,28 @@ function getSelectedText() {
         }
     }
     
+    // Get the selected text
+    let selectedText;
+    if (selection.toString) {
+        selectedText = selection.toString();
+    } else if (selection.text) {
+        selectedText = selection.text;
+    } else {
+        return null;
+    }
+    
+    // Ensure we have valid text
+    selectedText = selectedText.trim();
+    if (!selectedText) return null;
+    
     // Get the text content up to the start and end positions
     const fullText = contentSection.textContent;
-    const selectedText = selection.toString();
-    
-    if (!selectedText.trim()) return null;
     
     // Find the actual start position in the full text
     const start = fullText.indexOf(selectedText);
-    const end = start + selectedText.length;
+    if (start === -1) return null;  // Text not found
     
-    console.log('Selected text:', {
-        text: selectedText,
-        start: start,
-        end: end,
-        section: sectionName
-    });
+    const end = start + selectedText.length;
     
     return {
         text: selectedText,

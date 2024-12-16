@@ -84,6 +84,9 @@ body {
     border: 1px solid #dee2e6;
     border-radius: 4px;
     background-color: white;
+    -webkit-touch-callout: default;
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 .content-text {
@@ -339,6 +342,40 @@ body {
 
     .content-section {
         min-height: 150px;
+    }
+}
+
+/* Mobile touch selection styles */
+@media (max-width: 768px) {
+    .content-section {
+        -webkit-user-select: text;
+        user-select: text;
+        cursor: text;
+        touch-action: manipulation;
+    }
+
+    .highlight-buttons {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 15px;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        display: none;
+    }
+
+    .highlight-buttons .btn-group {
+        display: flex;
+        justify-content: space-around;
+        width: 100%;
+    }
+
+    .highlight-buttons .btn {
+        flex: 1;
+        margin: 0 5px;
+        padding: 10px;
     }
 }
 
